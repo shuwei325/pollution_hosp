@@ -1,0 +1,12 @@
+https://catalog.data.gov/dataset/modis-terra-aerosol-cloud-water-vapor-ozone-8-day-l3-global-1deg-cmg
+1. Download this dataset
+https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MOD08_E3/
+2. Download using wget.
+
+
+
+
+
+wget -N -e robots=off -m -np -R .html,.tmp -nH --cut-dirs=3 "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MOD08_D3/" --header "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJBUFMgT0F1dGgyIEF1dGhlbnRpY2F0b3IiLCJpYXQiOjE2ODI2Mjk5MjEsIm5iZiI6MTY4MjYyOTkyMSwiZXhwIjoxNjk4MTgxOTIxLCJ1aWQiOiJzaHV3ZWkudWNyIiwiZW1haWxfYWRkcmVzcyI6InNodXdlaS5jaG91QHVjci5hYy5jciIsInRva2VuQ3JlYXRvciI6InNodXdlaS51Y3IifQ.oCBYLkPW1zPAgX-8y78geqQVMe5xDgXRCwiTHh3gBd4" -P .
+
+wget -N -e robots=off -m -np -R .html,.tmp -nH --cut-dirs=3 "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MOD08_D3/2000/" --header "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJBUFMgT0F1dGgyIEF1dGhlbnRpY2F0b3IiLCJpYXQiOjE2ODI4MDE3NDcsIm5iZiI6MTY4MjgwMTc0NywiZXhwIjoxNjk4MzUzNzQ3LCJ1aWQiOiJzaHV3ZWkudWNyIiwiZW1haWxfYWRkcmVzcyI6InNodXdlaS5jaG91QHVjci5hYy5jciIsInRva2VuQ3JlYXRvciI6InNodXdlaS51Y3IifQ.jXY03T3odfNYJNADP06ivEiAyQ7kiGhkCR_cFnR0s68" -P .
