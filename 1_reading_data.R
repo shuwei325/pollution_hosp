@@ -62,33 +62,7 @@ egresos_region_semana <- egresos_region_dia %>%
 
 # CHRITS CIGEFI -----------------------------------------------------------
 
-load(file="./Data/CHIRTS_CIGEFI.RData")
-load(file="0_construye_mapaSalud.R")
-
-
-datos_space <- datos %>% ungroup() %>% filter(year==1995,week == 1) %>% select(longitude,latitude)
-
-puntos <- st_as_sf(datos_space,remove=FALSE, coords =c("longitude","latitude"), 
-                   crs = 4326, agr = "constant")
-
-# ggplot() +
-#   geom_sf(data = union_sf) +
-#   geom_sf(data = puntos) +
-#   theme_minimal()
-
-puntos_sf_joined <- 
-  st_join(puntos, union_sf) # spatial join to get intersection of points and poly
-
-datos_space_joined <- as.data.frame(puntos_sf_joined) %>% select(longitude, latitude, Región)
-
-datos1 <- datos %>% 
-  left_join(datos_space_joined, by=c("longitude","latitude")) %>% 
-  na.omit()
-
-datos_CHIRTS <- datos1 %>% group_by(year,week,date,Región) %>% summarise(Tmax = max(Tmax),
-                                                                         Tmin = min(Tmin)) %>%
-  ungroup()
-
+load(file="./Data/CHIRTS_CIGEFI_week_Region.RData")
 
 # Precipitación -----------------------------------------------------------
 
