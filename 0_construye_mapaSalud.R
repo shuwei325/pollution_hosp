@@ -43,3 +43,6 @@ ggplot() +
   geom_sf(data = union_sf, aes(fill = Región)) +
   theme_minimal()
 
+centroides_sf <- union_sf %>% st_centroid() 
+
+save(union_sf,centroides_sf,file = "./Data/regiones_geom.RData")
