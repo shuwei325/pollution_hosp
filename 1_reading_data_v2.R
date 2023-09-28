@@ -78,13 +78,21 @@ load(file='./Data/datosPrecCHIRPS.RData')
 load(file = "./Data/regiones_geom.RData")
 
 
-head(dat)
-range(dat$date)
+quantile(datos$precip_max,c(0.5,0.6,0.75,0.9))
+#quantile(datos1$precip_average,c(0.75,0.9))
+datos_CHIRPS <- datos %>% 
+  mutate(year = year(date),
+         week = epiweek(date)) %>%
+  group_by(lon,lat,year,week) %>% 
+  summarise(precip_max = max(precip_max),
+            precip_min = min(precip_min),
+            precip_mean = mean(precip_average),
+            n_precip_max_Q3= sum(precip_max > 11.95),
+            n_precip_max_P90= sum(precip_max > 23.87),
+  ) %>%
+  ungroup()
 
-unique(dat$date)
-
-
-datos_space <- dat %>% filter(date==dat$date[1]) %>% select(lon,lat)
+datos_space <- datos_CHIRPS %>% filter(year==datos_CHIRPS$year[1],week==datos_CHIRPS$week[1]) %>% select(lon,lat)
 
 puntos <- st_as_sf(datos_space,remove=FALSE, coords =c("lon","lat"), 
                    crs = 4326, agr = "constant")
@@ -94,21 +102,27 @@ puntos_sf_joined <- st_join(puntos, union_sf)
 
 datos_space_joined <- as.data.frame(puntos_sf_joined) %>% select(lon, lat, Región)
 
-dat1 <- dat %>% 
+datos_CHIRPS <- datos_CHIRPS %>% 
   left_join(datos_space_joined, by=c("lon","lat")) %>% 
   na.omit()
 
-datos_CHIRPS <- dat1 %>% 
-            mutate(year = year(date),
-                   week = epiweek(date)) %>%
-            group_by(year,week,Región) %>% summarise(precip = sum(chirps)) %>%
-  ungroup()
 datos_CHIRPS <- datos_CHIRPS %>%  mutate(date=aweek::get_date(week=week,year=year))
+
+datos_CHIRPS <- datos_CHIRPS %>% group_by(year,week,date,Región) %>% 
+  summarise(precip_max_max = max(precip_max),
+            precip_max_mean = mean(precip_max),
+            precip_max_min = min(precip_max),
+            precip_mean_mean = mean(precip_mean),
+            n_precip_max_Q3 =mean(n_precip_max_Q3),
+            n_precip_max_P90 =mean(n_precip_max_P90)            
+  ) %>%
+  ungroup()
+
 
 
 # AOD D3 ---------------------------------------------------------------------
 
-
+#weighted distance
 dirbase <- "./Data/MOD08_D3/"
 listfilesg <- list.files(path = dirbase,pattern = paste0("*.RData"), recursive = TRUE)
 
@@ -185,6 +199,9 @@ for(i in 1:(dim(fechas_unicas)[1])){
 }
 
 datos_aerosol <- bloques_regiones
+datos_aerosol_dist <- datos_aerosol
+
+
 
 
 
