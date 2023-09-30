@@ -19,6 +19,7 @@ datos_finales <- datos_finales %>% mutate(precip_max_max=log(precip_max_max+1),
                                           precip_max_min=log(precip_max_min+1),
                                           precip_mean_mean=log(precip_mean_mean+1),
                                           n_precip_max_Q3=log(n_precip_max_Q3+1),
+                                          aerosol = aerosol*1000,
                                           egreso_1 = lag(egreso),
                                           egreso_2 = lag(egreso,n=2),
                                           dif_egreso=egreso-lag(egreso)) #%>% na.omit()
@@ -73,10 +74,18 @@ datos_finales %>%
 
 #AOD
 datos_finales %>% filter(Región=="Brunca")%>%
-  ggplot( aes(x=date, y=aerosol, group = Región, color = Región)) +
+  ggplot( aes(x=epi.week, y=aerosol, color = Región)) +
   geom_line() +
-  geom_point()
+  geom_vline(xintercept = c(10,22), linetype="dotted",  #mes de marzo a mayo.
+             color = "blue", size=1.5) +
+  facet_wrap(~year)
 
+datos_finales %>% filter(Región=="Central Norte")%>%
+  ggplot( aes(x=epi.week, y=aerosol, color = Región)) +
+  geom_line() +
+  geom_vline(xintercept = c(10,22), linetype="dotted",  #mes de marzo a mayo.
+             color = "blue", size=1.5) +
+  facet_wrap(~year)
 
 
 # correlacion -------------------------------------------------------------
@@ -118,7 +127,7 @@ corr<-cor(egresos)
 (plot_corr <- ggcorrplot(corr, type = "lower",
                         lab = TRUE,lab_size = 3))
 
-Region<-Region_CN
+Region<-Region_CS
 
 
 with(Region,plot(egreso~Tmax_mean))
@@ -143,25 +152,34 @@ ccf(Region$egreso,Region$amplitude_max_min,lag.max=40)
 ccf(Region$egreso,Region$precip_max_max,lag.max=40)
 ccf(Region$egreso,Region$precip_mean_mean,lag.max=40)
 ccf(Region$egreso,Region$aerosol,lag.max=40)
-
+ccf(Region$egreso,Region$aerosol,lag.max=40,plot = FALSE)
 with(Region,lag2.plot (aerosol,egreso, 20))
 
 
 
 #modelos lineales
 
-#test<-Region %>% mutate(aerosol_20=lag(aerosol,20))
+test<-Region %>% mutate(aerosol_10=lag(aerosol,10))
+
+
+names(test)
+corr <- round(cor(test[,c(4,7,10,13,16,22,25,28,32)], use ="complete.obs"), 4)
+
+ggcorrplot(corr, type = "lower",
+           lab = TRUE,lab_size = 3)
+
+test1<-test %>% drop_na()
 
 mod0<-lm(egreso~Tmax_mean+Tmin_min+n_Tmin_Q1+amplitude_max_min+
-           precip_max_max+precip_mean_mean+aerosol_20,data=test)
+           precip_max_max+precip_mean_mean+aerosol_10,data=test1)
 summary(mod0)
 
 mod1<-lm(egreso~egreso_1+Tmax_mean+Tmin_min+n_Tmin_Q1+amplitude_max_min+
-           precip_max_max+precip_mean_mean+aerosol,data=Region)
+           precip_max_max+precip_mean_mean+aerosol_10,data=test1)
 summary(mod1)
 
 mod2<-lm(egreso~egreso_1+egreso_2+Tmax_mean+Tmin_min+n_Tmin_Q1+amplitude_max_min+
-           precip_max_max+precip_mean_mean+aerosol,data=Region)
+           precip_max_max+precip_mean_mean+aerosol_10,data=test1)
 summary(mod2)
 
 anova(mod1,mod2)
@@ -169,9 +187,9 @@ anova(mod1,mod2)
 plot(Region$egreso,type="l")
 points(fitted(mod2),type="l",col=2)
 
-plot(Region$egreso,fitted(mod0))
-plot(Region$egreso,fitted(mod1))
-plot(Region$egreso,fitted(mod2))
+plot(test1$egreso,fitted(mod0))
+plot(test1$egreso,fitted(mod1))
+plot(test1$egreso,fitted(mod2))
 
 
 
