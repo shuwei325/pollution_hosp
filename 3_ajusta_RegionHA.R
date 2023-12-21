@@ -86,6 +86,7 @@ rf_grid <- grid_regular(
 )
 
 
+
 regular_res <- tune_grid(rf_wf,
                          resamples = data_split_train,
                          grid = rf_grid)
@@ -128,7 +129,11 @@ calibration_tbl_RF <- calibration_tbl %>% modeltime_forecast(new_data = data_tes
                                                              actual_data = data_actual,
                                                              conf_method = "conformal_split")
 
+calibration_tbl_tr <- final_fit_RF %>% modeltime_calibrate(new_data = data_train_final)
 
+calibration_tbl_tr_RF <- calibration_tbl %>% modeltime_forecast(new_data = data_train_final,
+                                                                actual_data = data_train_final,
+                                                                conf_method = "conformal_split")
 calibration_tbl_RF %>%
   plot_modeltime_forecast()
 
@@ -212,6 +217,13 @@ calibration_tbl_XGB <- calibration_tbl %>% modeltime_forecast(new_data = data_te
                                                               actual_data = data_actual,
                                                               conf_method = "conformal_split") 
 
+calibration_tbl_tr <- final_fit_XGB %>% modeltime_calibrate(new_data = data_train_final)
+
+calibration_tbl_tr_XGB <- calibration_tbl %>% modeltime_forecast(new_data = data_train_final,
+                                                                 actual_data = data_train_final,
+                                                                 conf_method = "conformal_split")
+
+
 calibration_tbl_XGB %>%
   plot_modeltime_forecast()
 
@@ -232,6 +244,14 @@ ens_cal <- final_fit_ens %>% modeltime_calibrate(new_data = data_test)
 calibration_tbl_ENS <- ens_cal %>% modeltime_forecast(new_data = data_test,
                                                       actual_data = data_actual,
                                                       conf_method = "conformal_split") 
+
+ens_tr <- final_fit_ens %>% modeltime_calibrate(new_data = data_train_final)
+
+calibration_tbl_tr_ENS <- ens_tr %>% modeltime_forecast(new_data = data_train_final,
+                                                        actual_data = data_train_final,
+                                                        conf_method = "conformal_split")
+
+
 calibration_tbl_ENS %>%
   plot_modeltime_forecast()
 
@@ -239,5 +259,6 @@ ens_cal %>% modeltime_accuracy() %>%
   table_modeltime_accuracy(.interactive = T)
 
 save(calibration_tbl_RF,calibration_tbl_XGB,calibration_tbl_ENS,
+     calibration_tbl_tr_RF,calibration_tbl_tr_XGB,calibration_tbl_tr_ENS,
      file = 'Results/RegionHA.RData')
 

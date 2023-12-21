@@ -127,7 +127,7 @@ corr<-cor(egresos)
 (plot_corr <- ggcorrplot(corr, type = "lower",
                         lab = TRUE,lab_size = 3))
 
-Region<-Region_CS
+Region<-Region_HA
 
 
 with(Region,plot(egreso~Tmax_mean))

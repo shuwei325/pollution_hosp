@@ -4,6 +4,7 @@ library(vip)
 library(doParallel)
 library(modeltime)
 library(modeltime.ensemble)
+library(fastshap)
 
 load('Data/datos_finales2.RData')
 
@@ -27,7 +28,7 @@ Region_HA <- datos_finales %>% filter(Región == "Huetar Atlántica")
 Region_HN <- datos_finales %>% filter(Región == "Huetar Norte")
 Region_PC <- datos_finales %>% filter(Región == "Pacífico Central")
 
-Region <- Region_CH
+Region <- Region_PC
 
 set.seed(123)
 
@@ -38,9 +39,10 @@ data_test <- testing(data_split)
 
 
 outcome <- "egreso"  
-predictors <- c('egreso_1','Tmax_mean','Tmin_min','n_Tmin_Q1',
-                'amplitude_max_min','precip_max_max',
-                'precip_mean_mean','aerosol_10')
+# predictors <- c('egreso_1','Tmax_mean','Tmin_min','n_Tmin_Q1',
+#                 'amplitude_max_min','precip_max_max',
+#                 'precip_mean_mean','aerosol_10')
+predictors <- names(datos_finales)[-c(1,2,3,4,5,31)]
 
 data_recipe <- recipe(formula = as.formula(paste(outcome, "~", paste(predictors, collapse = " + "))),
                       data = data_train) 
@@ -80,8 +82,8 @@ tune_res  %>% collect_metrics() %>%
   labs(x = NULL, y = "RMSE")
 
 rf_grid <- grid_regular(
-  mtry(range = c(20, 40)),
-  min_n(range = c(5, 8)),
+  mtry(range = c(15, 25)),
+  min_n(range = c(30, 40)),
   levels = 5
 )
 
@@ -117,10 +119,12 @@ final_wf <- workflow() %>%
 
 final_fit_RF <- final_wf %>% fit(data = data_train_final)
 
-final_vip <- final_fit_RF %>%
+modeltime_RF <- modeltime_table(final_fit_RF)
+
+final_vip_RF <- final_fit_RF %>%
   extract_fit_parsnip() %>% vip()
 
-final_vip
+final_vip_RF
 
 data_actual <- data_train_final %>% bind_rows(data_test)
 calibration_tbl <- final_fit_RF %>% modeltime_calibrate(new_data = data_test)
@@ -205,10 +209,12 @@ final_wf <- workflow() %>%
 
 final_fit_XGB <- final_wf %>% fit(data = data_train_final)
 
-final_vip <- final_fit_XGB %>%
+modeltime_XGB <- modeltime_table(final_fit_XGB)
+
+final_vip_XGB <- final_fit_XGB %>%
   extract_fit_parsnip() %>% vip()
 
-final_vip
+final_vip_XGB
 
 data_actual <- data_train_final %>% bind_rows(data_test)
 calibration_tbl <- final_fit_XGB %>% modeltime_calibrate(new_data = data_test)
@@ -232,9 +238,97 @@ calibration_tbl %>% modeltime_accuracy() %>%
   table_modeltime_accuracy(.interactive = T)
 
 
+## PROPHET###########
+
+predictors_prop <- names(datos_finales)[-c(1,2,3,4,31)]
+data_recipe_prop <- recipe(formula = as.formula(paste(outcome, "~", paste(predictors_prop, collapse = " + "))),
+                           data = data_train) 
+
+prop_spec <- prophet_reg(mode = "regression",
+                         prior_scale_changepoints = tune(),
+                         prior_scale_seasonality = tune()) %>% 
+  set_engine("prophet")
+
+prop_wf <- workflow() %>%
+  add_recipe(data_recipe_prop) %>%
+  add_model(prop_spec)
+
+
+registerDoParallel()
+
+tune_res <- tune_grid(prop_wf,
+                      resamples = data_split_train,grid = 20)
+
+tune_res  %>% collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(mean,prior_scale_changepoints,prior_scale_seasonality) %>%
+  pivot_longer(prior_scale_changepoints:prior_scale_seasonality,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "RMSE")
+
+prop_grid <- grid_regular(
+  prior_scale_changepoints(range = c(0, 1)),
+  prior_scale_seasonality(range = c(0, 1)),
+  levels = 5
+)
+
+
+regular_res <- tune_grid(prop_wf,
+                         resamples = data_split_train,
+                         grid = prop_grid)
+
+regular_res %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  mutate(prior_scale_changepoints = factor(prior_scale_changepoints)) %>%
+  ggplot(aes(prior_scale_seasonality, mean, color = prior_scale_changepoints)) +
+  geom_line(alpha = 0.5, size = 1.5) +
+  geom_point() +
+  labs(y = "RMSE")
+
+best_rmse <- select_best(regular_res,"rmse")
+
+final_prop <- finalize_model(prop_spec ,best_rmse)
+
+final_spec <- final_prop %>% 
+  set_engine("prophet")
+
+final_wf <- workflow() %>%
+  add_recipe(data_recipe_prop) %>%
+  add_model(final_spec)
+
+
+final_fit_PROP <- final_wf %>% fit(data = data_train_final)
+
+modeltime_PROP <- modeltime_table(final_fit_PROP)
+
+calibration_tbl <- final_fit_PROP %>% modeltime_calibrate(new_data = data_test)
+
+calibration_tbl_PROP <- calibration_tbl %>% modeltime_forecast(new_data = data_test,
+                                                               actual_data = data_actual,
+                                                               conf_method = "conformal_split")
+
+calibration_tbl_tr <- final_fit_PROP %>% modeltime_calibrate(new_data = data_train_final)
+
+calibration_tbl_tr_PROP <- calibration_tbl %>% modeltime_forecast(new_data = data_train_final,
+                                                                  actual_data = data_train_final,
+                                                                  conf_method = "conformal_split")
+calibration_tbl_PROP %>%
+  plot_modeltime_forecast()
+
+
+calibration_tbl %>% modeltime_accuracy() %>%
+  table_modeltime_accuracy(.interactive = T)
+
+
 ### ENSEMBLE####
 
-models_RegionB <- modeltime_table(final_fit_RF,final_fit_XGB)
+models_RegionB <- modeltime_table(final_fit_RF,final_fit_XGB,final_fit_PROP)
 
 final_fit_ens <- models_RegionB %>% ensemble_average(type = "mean")
 
@@ -258,7 +352,32 @@ calibration_tbl_ENS %>%
 ens_cal %>% modeltime_accuracy() %>%
   table_modeltime_accuracy(.interactive = T)
 
+##VIPS##############
+pfun_pr <- function(object, newdata) {  # needs to return a numeric vector
+  calibration <- object %>% modeltime_calibrate(new_data = data_test)
+  pred_pr <- calibration %>% 
+    modeltime_forecast(new_data = newdata,
+                       actual_data = data_train_final)
+  vv <- pred_pr %>% filter(.key !='actual') %>% select(.value)
+  as.numeric(vv$.value)
+}
+
+show('Calculo de VP-SHARP')
+vipSH_RF <- vip(modeltime_RF,method = 'shap',train = data_train_final,
+                feature_names = predictors_prop,pred_wrapper = pfun_pr)
+
+vipSH_XGB <- vip(modeltime_XGB,method = 'shap',train = data_train_final,
+                 feature_names = predictors_prop,pred_wrapper = pfun_pr)
+
+vipSH_PROP <- vip(modeltime_PROP,method = 'shap',train = data_train_final,
+                  feature_names = predictors_prop,pred_wrapper = pfun_pr)
+
+
 save(calibration_tbl_RF,calibration_tbl_XGB,calibration_tbl_ENS,
+     calibration_tbl_PROP,
      calibration_tbl_tr_RF,calibration_tbl_tr_XGB,calibration_tbl_tr_ENS,
-     file = 'Results/RegionCH.RData')
+     calibration_tbl_tr_PROP,final_vip_RF,final_vip_XGB,
+     vipSH_RF,vipSH_XGB,vipSH_PROP,
+     file = 'Results/RegionPC_Full.RData')
+
 
