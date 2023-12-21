@@ -1,0 +1,234 @@
+---
+title: "ResultadosArticulo_Full"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(xtable)
+library(viridis)
+```
+
+Construcción de base única para gráficos:
+
+```{r}
+Regiones <- c('B','CN','CS','CH','HA','HN','PC')
+
+calibration <- NULL
+VIPs <- NULL
+VIPsSHAP <- NULL
+for(R in Regiones){
+  load(paste0('Results/Region',R,'_Full.RData'))
+  
+  calibration_temp <- calibration_tbl_RF %>% bind_rows(calibration_tbl_XGB %>% filter(.key !='actual')) %>%
+    bind_rows(calibration_tbl_PROP %>% filter(.key !='actual'))%>%
+    bind_rows(calibration_tbl_ENS %>% filter(.key !='actual')) %>%
+    mutate(Region = R)
+  calibration <- bind_rows(calibration,calibration_temp)
+  VIPs_temp <- (final_vip_RF$data %>% mutate(Importance = Importance/sum(Importance),Modelo = 'RF',Region = R))%>%
+    bind_rows((final_vip_XGB$data %>% mutate(Importance = Importance/sum(Importance),Modelo = 'XGB',Region = R)))
+  VIPs <- bind_rows(VIPs,VIPs_temp)
+  VIPsSHAP_temp <- (vipSH_RF$data %>% mutate(Importance = Importance/sum(Importance),Modelo = 'RF',Region = R))%>%
+    bind_rows((vipSH_XGB$data %>% mutate(Importance = Importance/sum(Importance),Modelo = 'XGB',Region = R))) %>%
+    bind_rows((vipSH_PROP$data %>% mutate(Importance = Importance/sum(Importance),Modelo = 'PROP',Region = R)))
+  VIPsSHAP <- bind_rows(VIPsSHAP,VIPsSHAP_temp)
+}
+
+```
+
+Base para métricas:
+
+```{r}
+metricas <- NULL
+for(R in Regiones){
+  load(paste0('Results/Region',R,'_Full.RData'))
+  
+  observaciones_test <- calibration_tbl_RF %>% filter(.key == 'actual') 
+  RF_test <- calibration_tbl_RF %>% filter(.key !='actual') %>% left_join(observaciones_test,by = '.index')
+  
+  XGB_test <- calibration_tbl_XGB %>% filter(.key !='actual') %>% left_join(observaciones_test,by = '.index')  
+
+  ENS_test <- calibration_tbl_ENS %>% filter(.key !='actual') %>% left_join(observaciones_test,by = '.index') %>% 
+    mutate(.model_desc.x = 'ENSEMBLE')
+  
+  PROP_test <- calibration_tbl_PROP %>% filter(.key !='actual') %>% left_join(observaciones_test,by = '.index') %>% 
+    mutate(.model_desc.x = 'PROPHET')
+
+  metricas_temp <- bind_rows(RF_test,XGB_test,PROP_test,ENS_test) %>% mutate(Region = R)
+  metricas <- bind_rows(metricas,metricas_temp)
+}
+
+metricas <- metricas %>% select(model = .model_desc.x, date = .index,
+                    prediction = .value.x,
+                    lower = .conf_lo.x,
+                    upper = .conf_hi.x,
+                    observed = .value.y,Region) 
+
+
+```
+
+Tablas de métricas:
+
+```{r}
+metricas <- metricas %>% mutate(MSE = (prediction-observed)^2,
+                    MAE = abs((prediction-observed)),
+                    IS = (upper-lower)+(2/0.05)*(lower-observed)*(observed<lower)+
+                      (2/0.05)*(observed-upper)*(observed>upper))
+
+metricas <- metricas %>% group_by(Region,model) %>%
+  mutate(MSE = mean(MSE),MAE=mean(MAE),IS=mean(IS)) %>%
+  select(Region,model,MSE,MAE,IS) %>% distinct() 
+
+metricas %>% kableExtra::kable()
+```
+
+Base de métricas del periodo de entrenamiento:
+
+```{r}
+metricas_train <- NULL
+for(R in Regiones){
+  load(paste0('Results/Region',R,'_Full.RData'))
+  
+  observaciones_train <- calibration_tbl_tr_RF %>% filter(.key == 'actual') 
+  RF_train <- calibration_tbl_tr_RF %>% filter(.key !='actual') %>% left_join(observaciones_train,by = '.index')
+  
+  XGB_train <- calibration_tbl_tr_XGB %>% filter(.key !='actual') %>% left_join(observaciones_train,by = '.index')  
+
+  ENS_train <- calibration_tbl_tr_ENS %>% filter(.key !='actual') %>% left_join(observaciones_train,by = '.index') %>% 
+    mutate(.model_desc.x = 'ENSEMBLE')
+  
+  PROP_train <- calibration_tbl_tr_PROP %>% filter(.key !='actual') %>% left_join(observaciones_train,by = '.index') %>% 
+    mutate(.model_desc.x = 'PROPHET')
+
+  metricas_temp_train <- bind_rows(RF_train,XGB_train,PROP_train,ENS_train) %>% mutate(Region = R)
+  metricas_train <- bind_rows(metricas_train,metricas_temp_train)
+}
+
+metricas_train <- metricas_train %>% select(model = .model_desc.x, date = .index,
+                    prediction = .value.x,
+                    lower = .conf_lo.x,
+                    upper = .conf_hi.x,
+                    observed = .value.y,Region) 
+
+
+
+```
+
+Tablas de métricas entrenamiento:
+
+```{r}
+metricas_train <- metricas_train %>% mutate(MSE_train = (prediction-observed)^2,
+                    MAE_train = abs((prediction-observed)),
+                    IS_train = (upper-lower)+(2/0.05)*(lower-observed)*(observed<lower)+
+                      (2/0.05)*(observed-upper)*(observed>upper))
+
+metricas_train <- metricas_train %>% group_by(Region,model) %>%
+  mutate(MSE_train = mean(MSE_train),MAE_train=mean(MAE_train),IS_train=mean(IS_train)) %>%
+  select(Region,model,MSE_train,MAE_train,IS_train) %>% distinct()
+
+metricas_train %>% kableExtra::kable()
+```
+
+Tabla final de métricas:
+
+```{r}
+metricas_final <- metricas %>% bind_cols(metricas_train[,-c(1,2)]) %>% 
+  mutate(MSE_rel = (MSE_train/MSE)*100,
+         MSE_rel =(MAE_train/MAE)*100,
+         IS_rel = (IS_train/IS)*100)
+
+latex_metricas_final <- xtable(metricas_final,digits = 2)
+#print(latex_metricas_final,include.rownames = F,booktabs = T)
+```
+
+Mejores modelos:
+
+```{r}
+mejores <- data.frame(Region = Regiones,
+                      Modelos = c('PROPHET W/ REGRESSORS','RANGER','RANGER','XGBOOST','RANGER','PROPHET W/ REGRESSORS','PROPHET W/ REGRESSORS'))
+
+mejores %>% kableExtra::kable()
+```
+
+Grafico mejores modelos:
+
+```{r}
+base_mejores <- NULL
+ i <- 1
+for(R in Regiones){
+  base_mejores_temp <- calibration %>% filter(Region == R) %>%
+    filter((.model_desc == 'ACTUAL') | (.model_desc == mejores$Modelos[i]))
+  i <- i+1
+  base_mejores <- bind_rows(base_mejores,base_mejores_temp)
+}
+
+viridis_palette <- viridis_pal(option = "C")(3) 
+
+ggplot(data = base_mejores) +
+  geom_line(
+    aes(x = .index, y = .value, color = .key),
+    size = 1
+  ) +
+  geom_ribbon(
+    aes(x = .index, ymin = .conf_lo, ymax = .conf_hi,fill = .key),
+    alpha = 0.3
+  ) +
+  scale_color_manual(values = viridis_palette) +
+  scale_fill_manual(values = viridis_palette) +
+  facet_wrap(
+    ~Region,
+    nrow = 2,
+    scales = "free_y",
+    labeller = labeller(Region = c(B = "Brunca", CH = "Chorotega",CN = "Central Norte",CS = "Central Sur",HA = "Huetar Atlantica",HN = "Huetar Norte",PC = "Pacifico Central"))
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Time",
+    y = "Discharges"
+  ) +
+  theme(
+    legend.position = "none",  # Remove the legend
+    axis.text = element_text(size = 10),
+    axis.title = element_text(face = "bold", size = 12)
+  ) +
+  guides(color = FALSE, fill = FALSE)  # Remove color and fill legends
+```
+
+Importancias:
+
+```{r}
+imp_CN <- VIPs %>% filter(Modelo == "RF",Region == "CN") 
+imp_CS <- VIPs %>% filter(Modelo == "RF",Region == "CS")
+imp_CH <- VIPs %>% filter(Modelo == "XGB",Region == "CH")
+imp_HA <- VIPs %>% filter(Modelo == "RF",Region == "HA")
+
+imp_tabla_long <- bind_rows(imp_CN,imp_CS,imp_CH,imp_HA) %>% select(-Modelo) %>% mutate(Importance = 100* Importance)
+
+imp_tabla_wide <- imp_tabla_long %>% pivot_wider(names_from =  Region,values_from = Importance)
+
+latex_imp_final <- xtable(imp_tabla_wide,digits = 1)
+#print(latex_imp_final,include.rownames = F,booktabs = T)
+```
+
+Importancias SHAP: 
+
+```{r}
+imp_B_SHAP <- VIPsSHAP %>% filter(Modelo == "PROP",Region == "B")
+imp_CN_SHAP <- VIPsSHAP %>% filter(Modelo == "RF",Region == "CN") 
+imp_CS_SHAP <- VIPsSHAP %>% filter(Modelo == "RF",Region == "CS")
+imp_CH_SHAP <- VIPsSHAP %>% filter(Modelo == "XGB",Region == "CH")
+imp_HA_SHAP <- VIPsSHAP %>% filter(Modelo == "RF",Region == "HA")
+imp_HN_SHAP <- VIPsSHAP %>% filter(Modelo == "PROP",Region == "HN")
+imp_PC_SHAP <- VIPsSHAP %>% filter(Modelo == "PROP",Region == "PC")
+
+
+imp_tabla_long_SHAP <- bind_rows(imp_B_SHAP,imp_CN_SHAP,imp_CS_SHAP,imp_CH_SHAP,
+                            imp_HA_SHAP,imp_HN_SHAP,imp_PC_SHAP) %>% 
+  select(-Modelo) %>% mutate(Importance = 100* Importance)
+
+imp_tabla_wide_SHAP <- imp_tabla_long_SHAP %>% pivot_wider(names_from =  Region,values_from = Importance)
+
+latex_imp_final_SHAP <- xtable(imp_tabla_wide_SHAP,digits = 1)
+#print(latex_imp_final_SHAP,include.rownames = F,booktabs = T)
+```
