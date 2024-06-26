@@ -41,7 +41,9 @@ union_sf <- CRC_sf_areas %>%
 
 ggplot() +
   geom_sf(data = union_sf, aes(fill = Región)) +
-  theme_minimal()
+  theme_minimal()+
+  labs(fill = 'Region')
+
 
 centroides_sf <- union_sf %>% st_centroid() 
 

@@ -378,6 +378,7 @@ save(calibration_tbl_RF,calibration_tbl_XGB,calibration_tbl_ENS,
      calibration_tbl_tr_RF,calibration_tbl_tr_XGB,calibration_tbl_tr_ENS,
      calibration_tbl_tr_PROP,final_vip_RF,final_vip_XGB,
      vipSH_RF,vipSH_XGB,vipSH_PROP,
+     final_rf,final_xgb,final_prop,
      file = 'Results/RegionPC_Full.RData')
 
 
